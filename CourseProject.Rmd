@@ -1,0 +1,145 @@
+---
+title: Practical Machine Learning Course Project
+author: kwatanwa17
+date: 23/9/2018
+output: html_document
+---
+```{r setup, cache = FALSE, echo = FALSE, message = FALSE, warning = FALSE, tidy = FALSE}
+knitr::opts_chunk$set(cache = TRUE, echo = TRUE, message = F, error = F, warning = F, comment = NA, fig.align = 'center', dpi = 100, tidy = F, cache.path = '.cache/', fig.path = 'fig/')
+
+```
+
+# Preproccesament
+
+## Training data set
+
+Load the data sets
+```{r}
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+```
+
+Load libraries
+```{r}
+library(dplyr)
+```
+
+### NA columm
+```{r}
+trainNA <- apply(training, 2, function(x) {
+  sum(is.na(x))
+})
+training <- training[,trainNA == 0]
+```
+
+### blank columm
+```{r}
+trainBlank <- apply(training, 2, function(x) {
+  sum(x%in%"")
+})
+training <- training[,trainBlank == 0]
+```
+
+### check class
+```{r}
+training_class <- sapply(training, class)
+```
+
+Factor class columm
+```{r}
+colnames(training[,training_class=="factor"])
+```
+
+We eliminate the following variables because they would not be useful to predict classe variable.
+
+- X
+- user_name
+- cvtd_timestamp
+- new_window
+
+```{r}
+training <- select(training, -c(X,user_name, cvtd_timestamp, new_window))
+```
+
+```{r}
+summary(training)
+```
+
+## Test data set
+
+Likewise, we clean the sample data set.
+```{r}
+testNA <- apply(testing, 2, function(x) {
+  sum(is.na(x))
+})
+testing <- testing[,testNA==0]
+testing <- select(testing, -c(X,user_name, cvtd_timestamp, new_window))
+```
+
+# Machine Learning
+We select Linear Discriminant Analysis and Random Forest to classificate the classe variables.
+
+Load the library
+```{r}
+library(caret)
+```
+
+## LDA
+
+We use cross validation method.
+```{r}
+FitLDA <- train(classe ~., method = "lda", data = training,
+                trControl = trainControl(method = "cv"))
+FitLDA
+```
+
+The accuracy of LDA model is 0.7168995. 
+```{r}
+predLDA <- predict(FitLDA, training)
+confusionMatrix(predLDA, training$classe)
+```
+
+We use this LDA model and pedict classes of the testing data set.
+```{r}
+predLDAtest <- predict(FitLDA, testing)
+predLDAtest
+```
+
+## Random forest
+
+Before we fit the data set to Random forest model, we need to prepare parallel processament.
+```{r}
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1) 
+registerDoParallel(cluster)
+fitControl <- trainControl(method = "cv",
+                           number = 5,
+                           allowParallel = TRUE)
+```
+
+Fit the training data to the model.
+```{r}
+FitRF <- train(classe ~., method = "rf", data = training,
+                trControl = fitControl)
+FitRF
+```
+
+This is the confusion matrix. As we can see, the classes are perfectly classificated.
+```{r}
+predRF <- predict(FitRF, training)
+confusionMatrix(predRF, training$classe)
+```
+
+Precidt testing data.
+```{r}
+predRFtest <- predict(FitRF, testing)
+predRFtest
+```
+
+Finally we compare two models' accordance.
+```{r}
+table(predLDAtest, predRFtest)
+plot(predLDAtest)
+plot(predRFtest)
+```
